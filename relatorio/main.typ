@@ -12,9 +12,9 @@
 
 = Introdução
 
-Objetiva-se renderizar na tela um "sistema solar" composto por um Sol, a Terra e a Lua, utilizando WebGPU e uma estrutura de grafo de cena, conforme as instruções do enunciado.
+Objetiva-se renderizar na tela um "sistema solar" composto pelo Sol, Mercúrio, a Terra e a Lua, utilizando WebGPU e uma estrutura de grafo de cena, conforme as instruções do enunciado.
 Foi escolhido TypeScript como a linguagem de programação. Foi utilizado como base o código do professor, que implementa o grafo de cena (nós, transformações, aparências, formas e motores de animação). A versão original estava em JavaScript e foi reescrita em TypeScript.
-O disco, utilizado como forma de todos os corpos celestes, e a montagem da cena do sistema solar foram implementados como parte deste trabalho.
+O disco, utilizado como forma de todos os corpos celestes, e a montagem básica da cena do sistema solar foram implementados como parte do trabalho anterior, a Tarefa 1.2. O presente trabalho constrói em cima disso, adicionando texturas, a rotação da Terra em torno de seu próprio eixo,
 
 = Desenvolvimento
 
@@ -28,6 +28,7 @@ Como todas as translações e rotações atuam em níveis separados da árvore, 
 
 A animação é feita por meio de subclasses de `Engine` registradas na cena, que são atualizadas uma vez por quadro. Cada engine aplica uma rotação proporcional ao tempo decorrido desde o quadro anterior, fazendo com que a velocidade da animação seja independente da taxa de quadros. Assim, a Terra realiza o seu movimento de translação ao redor do Sol, enquanto a Lua realiza o seu movimento de rotação em torno da Terra em uma velocidade bem maior, aproximando o comportamento observado no sistema solar real.
 
-= Vídeo
+= Links
 
 Link do vídeo de demonstração do funcionamento: #link("")
+Link do repositório no GitHub com o código do projeto: #link("https://github.com/luizfneves404/inf1761-projeto1")

@@ -11,6 +11,10 @@ import { Scene } from "./scene";
 import { Renderer } from "./renderer";
 import { Engine } from "./engine";
 import { Disk } from "./disk";
+import { TextureSet } from "./textureset";
+import { Texture } from "./texture";
+import { Sampler } from "./sampler";
+import { Quad } from "./quad";
 
 let device: GPUDevice,
   context: GPUCanvasContext | null = null,
@@ -32,6 +36,32 @@ class EarthOrbit extends Engine {
   }
 }
 
+class EarthRotation extends Engine {
+  trf: Transform;
+
+  constructor(trf: Transform) {
+    super();
+    this.trf = trf;
+  }
+
+  update(dt: number): void {
+    this.trf.rotate(500 * dt, 0, 0, -1);
+  }
+}
+
+class MercuryOrbit extends Engine {
+  trf: Transform;
+
+  constructor(trf: Transform) {
+    super();
+    this.trf = trf;
+  }
+
+  update(dt: number): void {
+    this.trf.rotate(20 * dt, 0, 0, -1);
+  }
+}
+
 class MoonOrbit extends Engine {
   trf: Transform;
 
@@ -46,69 +76,8 @@ class MoonOrbit extends Engine {
 }
 
 async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Promise<void> {
-  camera = new Camera2D(0, 10, 0, 10);
-
-  const disk = new Disk(device, 60);
-
-  const sunPos = new Transform();
-  sunPos.translate(5, 5, 0);
-  const sunPosNode = new Node({ trf: sunPos });
-
-  const sunScale = new Transform();
-  sunScale.scale(0.7, 0.7, 1);
-
-  const sunMaterial = new ColorMaterial(1, 1, 0);
-
-  const sun = new Node({
-    trf: sunScale,
-    apps: [sunMaterial],
-    shps: [disk],
-  });
-
-  sunPosNode.addNode(sun);
-
-  const earthRotation = new Transform();
-
-  const earthTrf = new Transform();
-  earthTrf.translate(3, 0, 0);
-  const earthScale = new Transform();
-  earthScale.scale(0.2, 0.2, 1);
-
-  const earthMaterial = new ColorMaterial(0, 0, 1);
-
-  const earthPosNode = new Node({
-    trf: earthTrf,
-    nodes: [new Node({ trf: earthScale, apps: [earthMaterial], shps: [disk] })],
-  });
-
-  const earth = new Node({
-    trf: earthRotation,
-    nodes: [earthPosNode],
-  });
-
-  sunPosNode.addNode(earth);
-
-  const moonRotation = new Transform();
-
-  const moonTrf = new Transform();
-  moonTrf.translate(0.5, 0, 0);
-  const moonScale = new Transform();
-  moonScale.scale(0.15, 0.15, 1);
-
-  const moonMaterial = new ColorMaterial(0.5, 0.5, 0.5);
-
-  const moon = new Node({
-    trf: moonRotation,
-    nodes: [
-      new Node({
-        trf: moonTrf,
-        nodes: [new Node({ trf: moonScale, apps: [moonMaterial], shps: [disk] })],
-      }),
-    ],
-  });
-
-  earthPosNode.addNode(moon);
-
+  // Untextured shader (the original 2D one): only backs the root node now -
+  // every body below is drawn under pipelineTex instead.
   const shader = await Shader.load(device, "/shaders/2d/shader.wgsl");
   shader.setVertexBuffers([
     {
@@ -118,13 +87,206 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
     },
   ]);
   const pipeline = new Pipeline(shader, targetFormat, { depthStencil: null });
-  shader.addMaterial(sunMaterial);
-  shader.addMaterial(earthMaterial);
-  shader.addMaterial(moonMaterial);
 
-  const root = new Node({ pipeline, nodes: [sunPosNode] });
+  // Textured shader (like main_3d's lit/textured pair): every body - multiplies
+  // the material color by decal_texture at @group(3), so every node drawn
+  // under this pipeline must bind a TextureSet.
+  const shdTex = await Shader.load(device, "/shaders/2d/textured.wgsl");
+  shdTex.setVertexBuffers([
+    {
+      arrayStride: 2 * 4,
+      stepMode: "vertex",
+      attributes: [{ format: "float32x2", offset: 0, varName: "coord" }],
+    },
+    {
+      arrayStride: 2 * 4,
+      stepMode: "vertex",
+      attributes: [{ format: "float32x2", offset: 0, varName: "texcoord" }],
+    },
+  ]);
+  const pipelineTex = new Pipeline(shdTex, targetFormat, { depthStencil: null });
+
+  camera = new Camera2D(0, 10, 0, 10);
+
+  const disk = new Disk(device, 60);
+  const quad = new Quad(device);
+
+  const sunPos = new Transform();
+  sunPos.translate(5, 5, 0);
+  const sunPosNode = new Node({ trf: sunPos });
+
+  const sunScale = new Transform();
+  sunScale.scale(0.7, 0.7, 1);
+
+  const sunTex = await Texture.load(device, "decal_texture", "/images/wikiimages-sun-11582.jpg");
+  const sunSampler = new Sampler(device, "decal_sampler");
+
+  const sunTextures = new TextureSet([sunTex, sunSampler]);
+  shdTex.addTextureSet(sunTextures);
+
+  const sunMaterial = new ColorMaterial(1, 1, 1);
+  shdTex.addMaterial(sunMaterial);
+
+  const sun = new Node({
+    trf: sunScale,
+    pipeline: pipelineTex,
+    apps: [sunMaterial, sunTextures],
+    shps: [disk],
+  });
+
+  sunPosNode.addNode(sun);
+
+  const earthTranslation = new Transform();
+
+  const earthTrf = new Transform();
+  earthTrf.translate(3, 0, 0);
+  const earthScale = new Transform();
+  earthScale.scale(0.2, 0.2, 1);
+
+  const earthTex = await Texture.load(
+    device,
+    "decal_texture",
+    "/images/Terrestrial_03-128x128.png",
+  );
+  const earthSampler = new Sampler(device, "decal_sampler");
+
+  const earthTextures = new TextureSet([earthTex, earthSampler]);
+  shdTex.addTextureSet(earthTextures);
+
+  // The textured shader still declares a "material" group (@group(1)) and
+  // reads material.color, so textured nodes need a material too - white,
+  // so the texture shows through unmodified (like main_3d's `white`).
+  const earthMaterial = new ColorMaterial(1, 1, 1);
+  shdTex.addMaterial(earthMaterial);
+
+  const earthRotation = new Transform();
+
+  const earthPosNode = new Node({
+    trf: earthTrf,
+    nodes: [
+      new Node({
+        trf: earthRotation,
+        nodes: [
+          new Node({
+            trf: earthScale,
+            pipeline: pipelineTex,
+            apps: [earthMaterial, earthTextures],
+            shps: [disk],
+          }),
+        ],
+      }),
+    ],
+  });
+
+  const earth = new Node({
+    trf: earthTranslation,
+    nodes: [earthPosNode],
+  });
+
+  sunPosNode.addNode(earth);
+
+  const moonRotation = new Transform();
+
+  const moonTrf = new Transform();
+  moonTrf.translate(1, 0, 0);
+  const moonScale = new Transform();
+  moonScale.scale(0.15, 0.15, 1);
+
+  const moonTex = await Texture.load(
+    device,
+    "decal_texture",
+    "/images/pexels-full-moon-1869760.jpg",
+  );
+  const moonSampler = new Sampler(device, "decal_sampler");
+
+  const moonTextures = new TextureSet([moonTex, moonSampler]);
+  shdTex.addTextureSet(moonTextures);
+
+  const moonMaterial = new ColorMaterial(1, 1, 1);
+  shdTex.addMaterial(moonMaterial);
+
+  const moon = new Node({
+    trf: moonRotation,
+    nodes: [
+      new Node({
+        trf: moonTrf,
+        nodes: [
+          new Node({
+            trf: moonScale,
+            pipeline: pipelineTex,
+            apps: [moonMaterial, moonTextures],
+            shps: [disk],
+          }),
+        ],
+      }),
+    ],
+  });
+
+  earthPosNode.addNode(moon);
+
+  const mercuryTrf = new Transform();
+  mercuryTrf.translate(1.5, 0, 0);
+  const mercuryScale = new Transform();
+  mercuryScale.scale(0.1, 0.1, 1);
+
+  const mercuryTex = await Texture.load(
+    device,
+    "decal_texture",
+    "/images/wikiimages-mercury-11591_640.png",
+  );
+  const mercurySampler = new Sampler(device, "decal_sampler");
+
+  const mercuryTextures = new TextureSet([mercuryTex, mercurySampler]);
+  shdTex.addTextureSet(mercuryTextures);
+
+  const mercuryMaterial = new ColorMaterial(1, 1, 1);
+  shdTex.addMaterial(mercuryMaterial);
+
+  const mercuryTranslation = new Transform();
+
+  const mercuryPosNode = new Node({
+    trf: mercuryTrf,
+    nodes: [
+      new Node({
+        trf: mercuryScale,
+        pipeline: pipelineTex,
+        apps: [mercuryMaterial, mercuryTextures],
+        shps: [disk],
+      }),
+    ],
+  });
+
+  const mercury = new Node({
+    trf: mercuryTranslation,
+    nodes: [mercuryPosNode],
+  });
+
+  sunPosNode.addNode(mercury);
+
+  const spaceTex = await Texture.load(device, "decal_texture", "/images/universe-2947500_1280.jpg");
+  const spaceSampler = new Sampler(device, "decal_sampler");
+
+  const spaceTextures = new TextureSet([spaceTex, spaceSampler]);
+  shdTex.addTextureSet(spaceTextures);
+
+  const spaceMaterial = new ColorMaterial(1, 1, 1);
+  shdTex.addMaterial(spaceMaterial);
+
+  const spaceScale = new Transform();
+  spaceScale.scale(10, 10, 1);
+
+  const spaceBackground = new Node({
+    trf: spaceScale,
+    pipeline: pipelineTex,
+    apps: [spaceTextures, spaceMaterial],
+    shps: [quad],
+  });
+
+  const root = new Node({ pipeline, nodes: [spaceBackground, sunPosNode] });
   scene = new Scene(root);
-  scene.addEngine(new EarthOrbit(earthRotation));
+  scene.addEngine(new EarthOrbit(earthTranslation));
+  scene.addEngine(new EarthRotation(earthRotation));
+  scene.addEngine(new MercuryOrbit(mercuryTranslation));
   scene.addEngine(new MoonOrbit(moonRotation));
 }
 
