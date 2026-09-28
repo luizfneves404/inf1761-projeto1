@@ -78,15 +78,15 @@ class MoonOrbit extends Engine {
 async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Promise<void> {
   // Untextured shader (the original 2D one): only backs the root node now -
   // every body below is drawn under pipelineTex instead.
-  const shader = await Shader.load(device, "/shaders/2d/shader.wgsl");
-  shader.setVertexBuffers([
-    {
-      arrayStride: 2 * 4,
-      stepMode: "vertex",
-      attributes: [{ format: "float32x2", offset: 0, varName: "pos" }],
-    },
-  ]);
-  const pipeline = new Pipeline(shader, targetFormat, { depthStencil: null });
+  // const shader = await Shader.load(device, "/shaders/2d/shader.wgsl");
+  // shader.setVertexBuffers([
+  //   {
+  //     arrayStride: 2 * 4,
+  //     stepMode: "vertex",
+  //     attributes: [{ format: "float32x2", offset: 0, varName: "pos" }],
+  //   },
+  // ]);
+  // const pipeline = new Pipeline(shader, targetFormat, { depthStencil: null });
 
   // Textured shader (like main_3d's lit/textured pair): every body - multiplies
   // the material color by decal_texture at @group(3), so every node drawn
@@ -129,7 +129,6 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
 
   const sun = new Node({
     trf: sunScale,
-    pipeline: pipelineTex,
     apps: [sunMaterial, sunTextures],
     shps: [disk],
   });
@@ -169,7 +168,6 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
         nodes: [
           new Node({
             trf: earthScale,
-            pipeline: pipelineTex,
             apps: [earthMaterial, earthTextures],
             shps: [disk],
           }),
@@ -213,7 +211,6 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
         nodes: [
           new Node({
             trf: moonScale,
-            pipeline: pipelineTex,
             apps: [moonMaterial, moonTextures],
             shps: [disk],
           }),
@@ -249,7 +246,6 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
     nodes: [
       new Node({
         trf: mercuryScale,
-        pipeline: pipelineTex,
         apps: [mercuryMaterial, mercuryTextures],
         shps: [disk],
       }),
@@ -277,12 +273,11 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
 
   const spaceBackground = new Node({
     trf: spaceScale,
-    pipeline: pipelineTex,
     apps: [spaceTextures, spaceMaterial],
     shps: [quad],
   });
 
-  const root = new Node({ pipeline, nodes: [spaceBackground, sunPosNode] });
+  const root = new Node({ pipeline: pipelineTex, nodes: [spaceBackground, sunPosNode] });
   scene = new Scene(root);
   scene.addEngine(new EarthOrbit(earthTranslation));
   scene.addEngine(new EarthRotation(earthRotation));
