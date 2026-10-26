@@ -13,6 +13,8 @@ struct Global {
     light_position: vec4<f32>,
     camera_position: vec4<f32>, // posição da câmera no espaço de iluminação
     fog_color: vec4<f32>,
+    clip_plane: vec4<f32>,
+    clip_plane_color: vec4<f32>,
 }
 @group(0) @binding(0)
 var<uniform> global: Global;
@@ -38,6 +40,7 @@ struct VertexOutput {
     @location(1) light: vec3<f32>,
     @location(2) view: vec3<f32>,
     @location(3) texcoord: vec2<f32>,
+    @location(4) clip_dist: f32,
 }
 
 // Quad plano no eixo XY (ver quad.py) — normal constante, sem tangente/textura
@@ -73,11 +76,16 @@ fn vs_main(
     out.view = global.camera_position.xyz - ilum_space_pos;
     out.texcoord = texcoord;
     out.clip_position = global.projection * (m.vertex * pos4);
+    out.clip_dist = dot(global.clip_plane, m.vertex * pos4);
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    // quad não tem interior: só descarta, sem cor de corte
+    if in.clip_dist < 0.0 {
+        discard;
+    }
     // renormaliza: a interpolacao entre vertices desnormaliza normal/luz/vista
     let normal = normalize(in.normal);
     let light = normalize(in.light);

@@ -18,6 +18,8 @@ struct Global {
         f32,
     >, // posição da câmera no espaço de iluminação (não usada nesta fórmula)
     fog_color: vec4<f32>,
+    clip_plane: vec4<f32>,
+    clip_plane_color: vec4<f32>,
 }
 @group(0) @binding(0)
 var<uniform> global: Global;
@@ -44,6 +46,7 @@ struct VertexOutput {
     @location(2) view: vec3<f32>,
     @location(3) position: vec3<f32>,
     @location(4) texcoord: vec2<f32>,
+    @location(5) clip_dist: f32,
 }
 
 // Iluminacao por fragmento (Phong shading): vs_main so transforma
@@ -60,48 +63,61 @@ fn vs_main(
 ) -> VertexOutput {
     let m = matrix[instance_index];
     var out: VertexOutput;
-    let ilum_space_pos = (m.vertex * vec4<f32>(coord, 1.0)).xyz;
+    let ilum_space_pos = (m.vertex * vec4<f32>(coord, 1.0));
+    let ilum_space_pos_3 = ilum_space_pos.xyz;
     var light: vec3<f32>;
     if global.light_position.w == 0.0 {
         light = normalize(global.light_position.xyz);
     } else {
-        light = normalize(global.light_position.xyz - ilum_space_pos);
+        light = normalize(global.light_position.xyz - ilum_space_pos_3);
     }
     out.normal = (m.normal * vec4<f32>(normal, 0.0)).xyz;
     out.light = light;
-    out.view = global.camera_position.xyz - ilum_space_pos;
+    out.view = global.camera_position.xyz - ilum_space_pos_3;
     out.clip_position = global.projection * (m.vertex * vec4<f32>(coord, 1.0));
-    out.position = ilum_space_pos;
+    out.position = ilum_space_pos_3;
     out.texcoord = texcoord;
+    out.clip_dist = dot(global.clip_plane, ilum_space_pos);
     return out;
 }
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // renormaliza: a interpolacao entre vertices desnormaliza normal/luz/vista
-    let normal = normalize(in.normal);
+fn fs_main(in: VertexOutput, @builtin(front_facing) is_front: bool) -> @location(0) vec4<f32> {
+    if in.clip_dist < 0.0 {
+        discard;
+    }
+    var k_spot: f32;
     // interpolate the position, not the light direction: the direction isn't linear across a triangle"
     let light = normalize(global.light_position.xyz - in.position);
-    let view = normalize(in.view);
-
-    var color = material.base_color * global.light_ambient.rgb;
-    let ndotl = dot(normal, light);
     let c = dot(-light, global.light_direction.xyz);
-    var k_spot: f32;
     if c > cos(global.cone_angle) {
         k_spot = pow(max(c, 0.0), global.focus_exponent);
     } else {
         k_spot = 0.0;
     }
+    let view = normalize(in.view);
+    var color: vec3<f32>;
+    var normal: vec3<f32>;
+    var final_color: vec4<f32>;
+    if is_front {
+        normal = normalize(in.normal);
+        color = material.base_color * global.light_ambient.rgb;
 
-    if ndotl > 0.0 {
-        color += material.base_color * k_spot * global.light_diffuse.rgb * ndotl;
-        let refl = normalize(reflect(-light, normal));
-        color += material.specular_color * k_spot * global.light_specular.rgb
-            * pow(max(0.0, dot(refl, view)), material.shininess);
+        let ndotl = dot(normal, light);
+        if ndotl > 0.0 {
+            color += material.base_color * k_spot * global.light_diffuse.rgb * ndotl;
+            let refl = normalize(reflect(-light, normal));
+            color += material.specular_color * k_spot * global.light_specular.rgb
+                * pow(max(0.0, dot(refl, view)), material.shininess);
+        }
+        final_color = vec4<f32>(color, 1.0)
+            * textureSample(decal_texture, decal_sampler, in.texcoord);
+    } else {
+        // A normal passa a ser a do próprio plano; o interior não tem textura
+        normal = -global.clip_plane.xyz;
+        color = global.clip_plane_color.rgb;
+        return vec4<f32>(color, 1.0);
     }
-    var final_color = vec4<f32>(color, 1.0)
-        * textureSample(decal_texture, decal_sampler, in.texcoord);
     var s_fim = 7.0;
     var s_ini = 5.0;
     var f: f32 = clamp(((s_fim - length(in.view)) / (s_fim - s_ini)), 0.0, 1.0);

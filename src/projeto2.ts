@@ -17,6 +17,8 @@ import { Renderer } from "./renderer";
 import { Cube } from "./cube";
 import { Sphere } from "./sphere";
 import { Quad } from "./quad";
+import { ClipPlane } from "./clipplane";
+import { PointLight } from "./pointlight";
 
 let canvas: HTMLCanvasElement | null = null;
 let device: GPUDevice | null = null;
@@ -80,6 +82,7 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
     20,
     "world",
   );
+  const pointlight = new PointLight(3.0, 5.0, 3.0, "world");
 
   const white = new PhongMaterial(1.0, 1.0, 1.0);
   const green = new PhongMaterial(0.5, 1.0, 0.5);
@@ -122,7 +125,7 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
       attributes: [{ format: "float32x3", offset: 0, varName: "normal" }],
     },
   ]);
-  const pipeline = new Pipeline(shader, targetFormat, { primitive: { cullMode: "back" } });
+  const pipeline = new Pipeline(shader, targetFormat, { primitive: { cullMode: "none" } });
 
   // depthBias/depthBiasSlopeScale replace the old dynamic PolygonOffset
   // (avoids z-fighting between the paper decal and the "floor" right below it)
@@ -173,6 +176,11 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
   shdTex3D.setValue("fog_color", new Float32Array([1.0, 1.0, 1.0, 1.0]));
   shader.setValue("fog_color", new Float32Array([1.0, 1.0, 1.0, 1.0]));
   shdTex.setValue("fog_color", new Float32Array([1.0, 1.0, 1.0, 1.0]));
+  const clip_plane: [number, number, number, number] = [1.0, 0.5, 1.0, 0.0];
+  new ClipPlane(shader, clip_plane[0], clip_plane[1], clip_plane[2], clip_plane[3]);
+  new ClipPlane(shdTex, clip_plane[0], clip_plane[1], clip_plane[2], clip_plane[3]);
+  new ClipPlane(shdTex3D, clip_plane[0], clip_plane[1], clip_plane[2], clip_plane[3]);
+
   const pipelineTex3D = new Pipeline(shdTex3D, targetFormat, {
     primitive: { cullMode: "none" },
     depthStencil: { depthBias: -1, depthBiasSlopeScale: -1 },
@@ -201,6 +209,7 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
 
   const trf5 = new Transform();
   trf5.scale(1.0, 0.5, 1.0);
+  trf5.translate(0, 0.001, 0.0);
 
   const trf6 = new Transform();
   trf6.scale(0.4, 0.4, 0.4);
@@ -211,10 +220,10 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
     nodes: [
       new Node({ trf: trf1, apps: [white], shps: [cube] }),
       new Node({ trf: trf5, apps: [yellow], shps: [cube] }),
-      treeLeg(4.5, -1.2, 4.5),
-      treeLeg(-4.5, -1.2, 4.5),
-      treeLeg(4.5, -1.2, -4.5),
-      treeLeg(-4.5, -1.2, -4.5),
+      treeLeg(4.5, -1.2 - 0.001, 4.5),
+      treeLeg(-4.5, -1.2 - 0.001, 4.5),
+      treeLeg(4.5, -1.2 - 0.001, -4.5),
+      treeLeg(-4.5, -1.2 - 0.001, -4.5),
       new Node({ pipeline: pipelineTex, trf: trf3, apps: [white, paperTextures], shps: [quad] }),
       new Node({ pipeline: pipelineTex3D, trf: trf2, apps: [green, ballTextures], shps: [sphere] }),
       new Node({ trf: trf6, apps: [red], shps: [sphere] }),
