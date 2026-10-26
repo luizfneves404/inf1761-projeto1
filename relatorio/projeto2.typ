@@ -29,18 +29,33 @@ $ f = "clamp"((s_"fim" - d) / (s_"fim" - s_"ini"), 0, 1), $
 
 que mistura a cor do objeto com a cor do fog: $c = f dot c_"obj" + (1 - f) dot c_"fog"$. A cor do fog é branca, igual à cor de fundo, de forma que objetos distantes se dissolvem no fundo.
 
-A distância $d$ foi obtida reaproveitando o vetor de visão. No shader de vértice, o vetor da posição até a câmera é passado ao fragmento sem normalização. Como ele é uma função afim da posição, sua interpolação é exata, e no fragmento seu comprimento fornece a distância, enquanto sua versão normalizada é usada na iluminação. Nesse processo também foi corrigido o sentido do vetor de visão, que deve ir da superfície até a câmera (`camera_position - posição`), já que as posições estão no espaço do mundo.
+A distância $d$ foi obtida reaproveitando o vetor de visão. No shader de vértice, o vetor da posição até a câmera é passado ao fragmento sem normalização. Como ele é uma função afim da posição, sua interpolação é exata, e no fragmento seu comprimento fornece a distância, enquanto sua versão normalizada é usada na iluminação.
 
 Como os shaders originais (`lit_spot.wgsl` e `textured.wgsl`) são usados pelas tarefas anteriores, foram criadas cópias exclusivas do projeto: `lit_spot_fog.wgsl` e `textured_fog.wgsl`.
 
 = Plano de corte
 
-O plano de corte usa a classe `ClipPlane` do código base, que envia ao shader a equação do plano $a x + b y + c z + d = 0$ como um `vec4` e a cor da seção de corte. Como o WGSL não tem equivalente ao `gl_ClipDistance`, o corte é emulado: no shader de vértice calcula-se a distância com sinal ao plano, `dot(clip_plane, vec4(posição, 1))`, em que a componente $w = 1$ faz o termo $d$ entrar na conta. Essa distância é interpolada e, no fragmento, os fragmentos com distância negativa são descartados.
+O plano de corte usa a classe `ClipPlane` do código base, que envia ao shader a equação do plano $a x + b y + c z + d = 0$ como um `vec4` e a cor da seção de corte. No shader de vértice calcula-se a distância com sinal ao plano. Essa distância é interpolada e, no fragmento, os fragmentos com distância negativa são descartados.
 
-Para que o objeto cortado pareça sólido, o culling de faces traseiras foi desativado e, pelo `front_facing`, as faces traseiras visíveis pela abertura do corte são pintadas com a cor do corte. Inicialmente essas faces foram iluminadas, mas como a posição usada era a da face traseira e não a do ponto no plano, o cone do spot e o fog revelavam a profundidade do interior. Por isso, a seção de corte passou a ser pintada com cor constante. No quad de papel apenas se descarta o fragmento, pois ele não possui interior.
+Para que o objeto cortado pareça sólido, o culling de faces traseiras foi desativado e as faces traseiras visíveis pela abertura do corte são pintadas com a cor do corte. No quad de papel apenas se descarta o fragmento, pois ele não possui interior.
 
-Por fim, observou-se z-fighting dentro do tijolo cortado: sua base e a face superior do tampo ocupavam exatamente o mesmo plano, $y = 0$. Antes do corte a base ficava oculta, mas com o corte ela passou a ser vista por dentro. A solução foi elevar o tijolo por um pequeno épsilon. O mesmo foi feito com as pernas da mesa em relação à face inferior do tampo.
+Por fim, observou-se z-fighting dentro do tijolo cortado: sua base e a face superior do tampo ocupavam exatamente o mesmo plano, $y = 0$. A seguir, um screenshot que demonstra o problema:
+
+#image("scene_z_fighting.png")
+
+Antes do corte a base ficava oculta, mas com o corte ela passou a ser vista por dentro. A solução foi elevar o tijolo por um pequeno épsilon. O mesmo foi feito com as pernas da mesa em relação à face inferior do tampo.
+
+= Conclusão
+Foi possível construir uma cena 3D complexa com aplicação de fog e o plano de corte. Segue-se um screenshot representativo da cena final:
+
+#image("scene_final.png")
 
 = Links
 
-Link do vídeo de demonstração do funcionamento: #link("TODO")
+Link do vídeo de demonstração do funcionamento: #link("https://drive.google.com/file/d/1O3zS3VOEyIbPNAG522fNMug11KZLDHf_/view?usp=sharing")
+
+Link do repositório: #link("https://github.com/luizfneves404/inf1761-projeto1")
+
+= Uso responsável de ferramentas de IA
+
+Durante o desenvolvimento foi utilizado o assistente Claude, via Claude Code, somente para: explicação de conceitos; revisão do código de shaders e depuração; replicação mecânica de código já escrito; e redação de uma versão inicial deste relatório, revisada e ajustada cuidadosamente pelo autor. Outras partes, como a implementação da cena e da lógica do shader foram realizadas exclusivamente pelo autor.

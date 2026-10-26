@@ -18,7 +18,6 @@ import { Cube } from "./cube";
 import { Sphere } from "./sphere";
 import { Quad } from "./quad";
 import { ClipPlane } from "./clipplane";
-import { PointLight } from "./pointlight";
 
 let canvas: HTMLCanvasElement | null = null;
 let device: GPUDevice | null = null;
@@ -82,7 +81,6 @@ async function initialize(device: GPUDevice, targetFormat: GPUTextureFormat): Pr
     20,
     "world",
   );
-  const pointlight = new PointLight(3.0, 5.0, 3.0, "world");
 
   const white = new PhongMaterial(1.0, 1.0, 1.0);
   const green = new PhongMaterial(0.5, 1.0, 0.5);
